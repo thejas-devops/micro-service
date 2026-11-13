@@ -28,7 +28,7 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: 968267516716.dkr.ecr.ap-south-1.amazonaws.com/adservice:2
+        image: 968267516716.dkr.ecr.ap-south-1.amazonaws.com/adservice:6
         ports:
         - containerPort: 9555
         env:
