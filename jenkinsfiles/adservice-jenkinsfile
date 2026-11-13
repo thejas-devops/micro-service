@@ -65,7 +65,7 @@ pipeline {
                             else
                                 echo "No changes to commit"
                             fi
-                             git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$git_token" | base64 | tr -d '\\n')" push origin HEAD:master
+                             git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$git_tokan" | base64 | tr -d '\\n')" push origin HEAD:master
                         '''
                     }
                 }
