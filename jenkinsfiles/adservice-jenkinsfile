@@ -1,5 +1,6 @@
+
 pipeline {
-    agent any 
+    agent any
 
     environment {
         GIT_REPO_NAME = "micro-service"
@@ -8,10 +9,10 @@ pipeline {
         IMAGE_NAME = "adservice"
         REPO_URL = "968267516716.dkr.ecr.ap-south-1.amazonaws.com/adservice"
         YAML_FILE = "adservice.yaml"
-        GIT_TOKAN = credentials('git-tokan')
     }
 
     stages {
+
         stage('Cleaning Workspace') {
             steps {
                 cleanWs()
@@ -20,52 +21,74 @@ pipeline {
 
         stage('Checkout from Git') {
             steps {
-                git branch: 'master', url: 'https://github.com/thejas-devops/micro-service.git'
+                git branch: 'master',
+                    url: 'https://github.com/thejas-devops/micro-service.git'
             }
         }
 
-        stage("Docker Image Build") {
+        stage('Docker Image Build') {
             steps {
-                script {
-                    dir('src/adservice') {
-                        sh 'docker system prune -f'
-                        sh 'docker container prune -f'
-                        sh 'docker build -t adservice .'
-                    }
-                }
-            }
-        }
-
-        stage("ECR Image Pushing") {
-            steps {
-                script {
+                dir('src/adservice') {
                     sh '''
-                aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 968267516716.dkr.ecr.ap-south-1.amazonaws.com    
-		docker tag adservice:latest 968267516716.dkr.ecr.ap-south-1.amazonaws.com/adservice:${BUILD_NUMBER}
-                    docker push 968267516716.dkr.ecr.ap-south-1.amazonaws.com/adservice:${BUILD_NUMBER}
+                        docker system prune -f
+                        docker container prune -f
+                        docker build -t adservice .
                     '''
                 }
             }
         }
 
-    stage('Update Deployment file') {
+        stage('ECR Image Pushing') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region ap-south-1 |
+                    docker login --username AWS --password-stdin \
+                    968267516716.dkr.ecr.ap-south-1.amazonaws.com
+
+                    docker tag adservice:latest ${REPO_URL}:${BUILD_NUMBER}
+
+                    docker push ${REPO_URL}:${BUILD_NUMBER}
+                '''
+            }
+        }
+
+        stage('Update Deployment file') {
             steps {
                 dir('kubernetes-files') {
-                    withCredentials([string(credentialsId: 'git-tokan', variable: 'git_token')]) {
+
+                    withCredentials([
+                        string(
+                            credentialsId: 'git-tokan',
+                            variable: 'GIT_TOKEN'
+                        )
+                    ]) {
+
                         sh '''
                             set -e
+
                             git config user.email "${GIT_EMAIL}"
                             git config user.name "${GIT_USER_NAME}"
+
                             echo "Build Number: ${BUILD_NUMBER}"
 
+                            if [ -z "$GIT_TOKEN" ]; then
+                                echo "GitHub token is empty"
+                                exit 1
+                            fi
+
                             sed -i "s#image:.*#image: ${REPO_URL}:${BUILD_NUMBER}#" ${YAML_FILE}
+
                             git add ${YAML_FILE}
+
                             if ! git diff --cached --quiet; then
                                 git commit -m "Update ${IMAGE_NAME} Image to version ${BUILD_NUMBER}"
                             else
                                 echo "No changes to commit"
                             fi
-                             git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$git_tokan" | base64 | tr -d '\\n')" push origin HEAD:master
+
+                            AUTH=$(printf '%s:%s' "$GIT_USER_NAME" "$GIT_TOKEN" | base64 | tr -d '\\n')
+
+                            git -c http.extraheader="AUTHORIZATION: Basic $AUTH" push origin HEAD:master
                         '''
                     }
                 }
